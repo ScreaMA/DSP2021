@@ -62,7 +62,7 @@ def wavConvert():
 
     
 
-def waveFFTEnhance():
+def waveFFTEnhance(filedir):
     global freData
     global y
     global endPoint
@@ -94,7 +94,7 @@ def waveFFTEnhance():
     #write into new wavefile
     wavFile = impData.astype(np.int16)
     wavFile = wavFile / 2**15
-    name = "Improved2.wav"
+    name = "Improved_"+filedir+".wav"
     wavfile.write(name, frameRate, wavFile)
     #continue to detect vowels
     vowelDetect()
@@ -166,7 +166,9 @@ def vowelDetect():
         print("ʊː ")
     if th11:
         print("ɜː ")    
+def vowelDetector(filedir):
+    loadWave(filedir)
+    wavConvert()
+    waveFFTEnhance(filedir)
 
-loadWave("cup.wav")
-wavConvert()
-waveFFTEnhance()
+vowelDetector("cup.wav")
