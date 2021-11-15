@@ -44,25 +44,32 @@ class generateCoefficients:
         #plt.xlim(0, 100)
         #plt.show()
     def highpassDesign(self):
-        highpassOutput = np.zeros(self.N)
+        highpassOutput = np.ones(self.N)
         highpassPoint = int(self.fre/self.sampleRate*self.N)
-        highpassOutput[0:highpassPoint] =0
-        highpassOutput[int(self.N/2)+highpassPoint:self.N-1] =0
-        highpassOutput[highpassPoint:int(self.N/2)] =1
-        highpassOutput[int(self.N/2):int(self.N/2)+highpassPoint] =1
+        highpassOutput[0:highpassPoint+1] =0
+        highpassOutput[self.N-highpassPoint:self.N-1] =0
+        #highpassOutput[highpassPoint:int(self.N/2)] =1
+        #highpassOutput[int(self.N/2):self.N-highpassPoint] =1
         highpassInput = np.real(np.fft.ifft(highpassOutput))
         #debug info
         print("Highpass Design:",len(highpassInput),highpassInput)
-        return highpassInput
+        filterDesign = np.zeros(self.N)
+        filterDesign[0:int(self.N/2)]=highpassInput[int(self.N/2):self.N]
+        filterDesign[int(self.N/2):self.N]=highpassInput[0:int(self.N/2)]
+        return filterDesign
     def bandstopDesign(self):
         #calculate bandstop filter as the same
         bandstopOutput = np.ones(self.N)
         bandstopPointLeft = int((self.fre-self.bandwidth)/self.sampleRate*self.N)
         bandstopPointRight = int((self.fre+self.bandwidth)/self.sampleRate*self.N)
-        bandstopOutput[bandstopPointLeft:bandstopPointRight] = 0;
+        bandstopOutput[bandstopPointLeft:bandstopPointRight+1] = 0
+        bandstopOutput[self.N-bandstopPointRight:self.N-bandstopPointLeft+1] = 0
         bandstopInput = np.real(np.fft.ifft(bandstopOutput))
         print("Bandstop Design:",len(bandstopInput),bandstopInput)
-        return bandstopInput
+        filterDesign = np.zeros(self.N)
+        filterDesign[0:int(self.N/2)]=bandstopInput[int(self.N/2):self.N]
+        filterDesign[int(self.N/2):self.N]=bandstopInput[0:int(self.N/2)]
+        return filterDesign
 
         
 class FIRFilter:
@@ -95,12 +102,10 @@ class FIRFilter:
         output_signal = signal - cancellor
         self.lns(output_signal, learningRate)
         return output_signal
-
-        print("LMS Desgin:",self.coefficients)
     def lns(self,error,mu = 0.005):
         for j in range(self.N):
             self.coefficients[j] =self.coefficients[j]+ error *mu*self.buffer[j]
-filePath = "ECG_msc_matric_8.dat"
+filePath = "ECG_msc_matric_7.dat"
 timeData = loadFile(filePath)
 N=len(timeData)
 '''
@@ -109,21 +114,21 @@ for i in range(N):
     timeData[i] = timeData[i] -avr
 '''
 a = generateCoefficients(50,250,filePath)
-b = generateCoefficients(1,250,filePath)
+b = generateCoefficients(0.5,250,filePath)
 a.FFTprocess()
 highpassCoefficients = b.highpassDesign()
 buffer = np.zeros(N)
 highpassFIR = FIRFilter(highpassCoefficients,buffer)
 output = np.zeros(N)
-#for i in range(N):
-#    output[i] = highpassFIR.dofilter(timeData[i])
-buffer = np.zeros(N)
+for i in range(N):
+    output[i] = highpassFIR.dofilterLMS(timeData[i])
+#buffer = np.zeros(N)
 bandstopCoefficients = a.bandstopDesign()
 bandstopFIR = FIRFilter(bandstopCoefficients,buffer)
-#for i in range(N):
-#    output[i] = bandstopFIR.dofilter(output[i])
-output[0]=output[1]
-output[N-1]=output[N-2]
+for i in range(N):
+    output[i] = bandstopFIR.dofilterLMS(timeData[i])
+#output[0]=output[1]
+#output[N-1]=output[N-2]
 plt.figure(2)
 plt.subplot(211)
 x = np.linspace(0,20,N)
@@ -143,21 +148,3 @@ lmsOutput[N-1]=lmsOutput[N-2]
 plt.subplot(212)
 plt.plot(x, lmsOutput)
 plt.show()
-
-'''
-    def highpassDesign(self):
-        highpassOutput = copy.deepcopy(self.output)
-        highpassPoint = int(self.fre/self.sampleRate*self.N)
-        highpassOutput[2:highpassPoint] =0
-        highpassOutput[self.N-highpassPoint:self.N-2] =0
-        highpassInput = np.fft.ifft(highpassOutput)
-        highpassFilter = signal.deconvolve(self.timeData,highpassInput)
-        plt.subplot(313) 
-        plt.plot(self.x, highpassInput)
-        #plt.plot(self.freq, highpassOutput)
-        #plt.xlabel("Tims (s)")
-        print("Design:",highpassFilter[0])
-        print("Design:",len(highpassFilter[1]),highpassFilter[1])
-        plt.show()
-        return highpassFilter
-'''
