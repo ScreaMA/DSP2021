@@ -2,18 +2,18 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
-def loadFile(filePath = "ECG_msc_matric_7.dat"):
+def loadFile(filePath):
     #Read ECG data from file 
     a = open(filePath, 'r')
     timeData = []
     #convert string to float
     for temp in a.readlines():
         temp = temp.strip('\n')
-        timeData.append(float(temp)*1e5)
+        timeData.append(float(temp))
     a.close()
     return timeData
 class generateCoefficients:
-    def __init__(self,stopFrequency,sampleRate,bandwidth = 5,filePath = "ECG_msc_matric_7.dat"):
+    def __init__(self,stopFrequency,sampleRate,filePath = "ECG_msc_matric_7.dat",bandwidth = 5):
         #initialize function
         self.fre = stopFrequency
         self.sampleRate = sampleRate
@@ -81,29 +81,35 @@ class FIRFilter:
         output=0
         for i in range(len(self.coefficients)):
             output=output+self.buffer[i]*self.coefficients[i]
+        #print("normal inner:",output)
         return output
     def dofilterLMS(self, v):
         for j in range(self.N - 1):
             self.buffer[self.N - 1 - j] = self.buffer[self.N - 2 - j]
         self.buffer[0] = v 
-        return np.inner(self.buffer, self.coefficients)
+        result = np.inner(self.buffer, self.coefficients)
+        #print("LMS inner:",result)
+        return result
     def doFilterAdaptive(self,signal, noise, learningRate):
-        y = np.empty((len(signal)))
-        for i in range(len(signal)):
-            ref_noise = np.sin(2.0 * np.pi * noise / 1000 * i)
-            cancellor = self.dofilterLMS(ref_noise)
-            output_signal = signal[i] - cancellor
-            self.lns(output_signal, learningRate)
-            y[i] = output_signal
+        cancellor = self.dofilterLMS(noise)
+        output_signal = signal - cancellor
+        self.lns(output_signal, learningRate)
+        return output_signal
+
         print("LMS Desgin:",self.coefficients)
-    def lns(self,error,mu = 0.01):
+    def lns(self,error,mu = 0.005):
         for j in range(self.N):
             self.coefficients[j] =self.coefficients[j]+ error *mu*self.buffer[j]
-
-timeData = loadFile("ECG_msc_matric_5.dat")
+filePath = "ECG_msc_matric_8.dat"
+timeData = loadFile(filePath)
 N=len(timeData)
-a = generateCoefficients(50,250)
-b = generateCoefficients(1,250)
+'''
+avr = np.average(timeData)
+for i in range(N):
+    timeData[i] = timeData[i] -avr
+'''
+a = generateCoefficients(50,250,filePath)
+b = generateCoefficients(1,250,filePath)
 a.FFTprocess()
 highpassCoefficients = b.highpassDesign()
 buffer = np.zeros(N)
@@ -123,13 +129,17 @@ plt.subplot(211)
 x = np.linspace(0,20,N)
 plt.plot(x, output)
 
+#plt.show()
+
 buffer = np.zeros(N)
 lmsCoefficients = np.zeros(N)
 lmsOutput = np.zeros(N)
 lmsFIR = FIRFilter(lmsCoefficients,buffer)
-lmsFIR.doFilterAdaptive(timeData,50,0.01)
 for i in range(N):
-    lmsOutput[i]=lmsFIR.dofilter(timeData[i])
+    ref_noise = np.sin(2.0 * np.pi * (i/5))
+    lmsOutput[i]=lmsFIR.doFilterAdaptive(timeData[i],ref_noise,0.0005)
+lmsOutput[0]=lmsOutput[1]
+lmsOutput[N-1]=lmsOutput[N-2]
 plt.subplot(212)
 plt.plot(x, lmsOutput)
 plt.show()
